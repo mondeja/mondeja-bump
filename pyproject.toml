@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "mondeja-bump"
+version = "0.1.0"
+description = "Just bump semantic version."
+authors = ["Álvaro Mondéjar Rubio <mondejar1994@gmail.com>"]
+license = "BSD-3-Clause"
+readme = "README.md"
+packages = [{include = "mondeja_bump.py"}]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+tomlkit = "^0.11.0"
+
+[tool.poetry.scripts]
+bump = "mondeja_bump:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
