@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mondeja-bump"
-version = "0.1.0"
+version = "0.1.1"
 description = "Just bump semantic version."
 authors = ["Álvaro Mondéjar Rubio <mondejar1994@gmail.com>"]
 license = "BSD-3-Clause"

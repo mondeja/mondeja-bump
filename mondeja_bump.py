@@ -210,6 +210,7 @@ def run():
     )
 
     write_new_version_in_targets(target_version, targets)
+    sys.stdout.write(f"{target_version}\n")
 
     return 0
 
