@@ -1,13 +1,11 @@
 import argparse
-import copy
 import os
 import re
 import sys
 
-import tomlkit
+import tomli
 
 DEFAULT_SEMVER_REGEX = r"\d+\.\d+\.\d+"
-
 SEMVER_PART_ALIASES = {
     "major": "major",
     "minor": "minor",
@@ -28,37 +26,33 @@ def error(msg, exitcode=1, exit=True):
         sys.exit(exitcode)
 
 
-def read_pyproject_toml():
+def is_semver_version_or_error(version):
+    if not re.match(DEFAULT_SEMVER_REGEX, version):
+        error(f"The version '{version}' does not follow semantic versioning!")
+
+
+def read_config():
     if not os.path.isfile("pyproject.toml"):
         error(
             "Reading of configuration from"
             " another file than pyproject.toml is not supported\n"
         )
 
-    with open("pyproject.toml") as f:
-        return tomlkit.parse(f.read())
+    with open("pyproject.toml", "rb") as f:
+        pyproject_toml = tomli.load(f)
 
-
-def is_semver_version_or_error(version):
-    if not re.match(DEFAULT_SEMVER_REGEX, version):
-        error(f"The version '{version}' does not follow semantic versioning!")
-
-
-def read_config(pyproject_toml):
     if "bump" in pyproject_toml.get("tool", {}):
         if "source" not in pyproject_toml["tool"]["bump"]:
             source = {
                 "file": "pyproject.toml",
-                "regex": None,
+                "regex": DEFAULT_SEMVER_REGEX,
             }
         else:
             source = pyproject_toml["tool"]["bump"]["source"]
             if isinstance(source, str):
                 source = {
                     "file": source,
-                    "regex": (
-                        None if source == "pyproject.toml" else DEFAULT_SEMVER_REGEX
-                    ),
+                    "regex": DEFAULT_SEMVER_REGEX,
                 }
             elif not isinstance(source, dict):
                 error(
@@ -66,20 +60,19 @@ def read_config(pyproject_toml):
                     " `tool.bump.source` config field"
                 )
             else:
-                file = "pyproject.toml" if "file" not in source else source["file"]
-                regex = (
-                    None if source["file"] == "pyproject.toml" else DEFAULT_SEMVER_REGEX
-                )
-                source = {"file": file, "regex": regex}
+                source = {
+                    "file": source.get("file", "pyproject.toml"),
+                    "regex": DEFAULT_SEMVER_REGEX,
+                }
         if "targets" not in pyproject_toml["tool"]["bump"]:
             targets = [
                 {
                     "file": "pyproject.toml",
-                    "regex": None,
+                    "regex": DEFAULT_SEMVER_REGEX,
                 }
             ]
         else:
-            _targets = pyproject_toml["tool"]["bump"]["targets"].copy()
+            _targets = pyproject_toml["tool"]["bump"]["targets"]
 
             if not isinstance(_targets, list):
                 error(
@@ -93,11 +86,7 @@ def read_config(pyproject_toml):
                 if isinstance(target, str):
                     _target = {
                         "file": target,
-                        "regex": (
-                            None
-                            if "target" == "pyproject.toml"
-                            else DEFAULT_SEMVER_REGEX
-                        ),
+                        "regex": DEFAULT_SEMVER_REGEX,
                     }
                 elif not isinstance(target, dict):
                     error(
@@ -115,13 +104,10 @@ def read_config(pyproject_toml):
                         )
                         _errored = True
                         continue
-                    if "regex" not in target:
-                        regex = (
-                            None
-                            if target["file"] == "pyproject.toml"
-                            else DEFAULT_SEMVER_REGEX
-                        )
-                        _target = {"regex": regex, "file": target["file"]}
+                    _target = {
+                        "regex": target.get("regex", DEFAULT_SEMVER_REGEX),
+                        "file": target["file"],
+                    }
                 targets.append(_target)
             if _errored:
                 sys.exit(1)
@@ -137,13 +123,13 @@ def read_config(pyproject_toml):
     return (
         {
             "file": "pyproject.toml",
-            "regex": None,
+            "regex": DEFAULT_SEMVER_REGEX,
         },
-        [{"file": "pyproject.toml", "regex": None}],
+        [{"file": "pyproject.toml", "regex": DEFAULT_SEMVER_REGEX}],
     )
 
 
-def read_source_version(source, pyproject_toml):
+def read_source_version(source):
     with open(source["file"]) as f:
         match = re.search(source["regex"], f.read())
     if match is None:
@@ -171,18 +157,10 @@ def bump_version(version, semver_part):
 
 def write_new_version_in_targets(version, targets):
     for target in targets:
-        if target["regex"] is None:
-            # "pyproject.toml".tool.poetry.version
-            with open(target["file"]) as f:
-                pyproject_toml = tomlkit.parse(f.read())
-            pyproject_toml["tool"]["poetry"]["version"] = version
-            with open(target["file"], "w") as f:
-                f.write(tomlkit.dumps(pyproject_toml))
-        else:
-            with open(target["file"]) as f:
-                previous_content = f.read()
-            with open(target["file"], "w") as f:
-                f.write(re.sub(target["regex"], version, previous_content))
+        with open(target["file"]) as f:
+            previous_content = f.read()
+        with open(target["file"], "w") as f:
+            f.write(re.sub(target["regex"], version, previous_content))
 
 
 def run():
@@ -195,15 +173,8 @@ def run():
     )
     args = parser.parse_args()
 
-    pyproject_toml = read_pyproject_toml()
-    source, targets = read_config(pyproject_toml)
-
-    if source["regex"] is None:
-        # reading from "pyproject.toml".tool.poetry.version
-        source_version = pyproject_toml["tool"]["poetry"]["version"]
-    else:
-        source_version = read_source_version(source)
-
+    source, targets = read_config()
+    source_version = read_source_version(source)
     target_version = bump_version(
         source_version,
         SEMVER_PART_ALIASES[args.semver_part],

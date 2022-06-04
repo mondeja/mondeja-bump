@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mondeja-bump"
-version = "0.1.1"
+version = "0.2.0"
 description = "Just bump semantic version."
 authors = ["Álvaro Mondéjar Rubio <mondejar1994@gmail.com>"]
 license = "BSD-3-Clause"
@@ -9,7 +9,7 @@ packages = [{include = "mondeja_bump.py"}]
 
 [tool.poetry.dependencies]
 python = "^3.7"
-tomlkit = "^0.11.0"
+tomli = "*"
 
 [tool.poetry.scripts]
 bump = "mondeja_bump:main"
