@@ -9,7 +9,7 @@ python-versions = ">=3.7"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.7"
-content-hash = "e99488a3ecbb81e68eb0032d803b3d7f5e2f49c7bc4185c7ce71537518ba051c"
+content-hash = "eecc2906f50962783ccac2b5874d3d50be3a9b955cfe9832b66e3cd3d42d885c"
 
 [metadata.files]
 tomli = [

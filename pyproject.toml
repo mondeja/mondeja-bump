@@ -9,11 +9,7 @@ packages = [{include = "mondeja_bump.py"}]
 
 [tool.poetry.dependencies]
 python = "^3.7"
-tomli = "*"
+tomli = { version = "*", python = "<3.11" }
 
 [tool.poetry.scripts]
 bump = "mondeja_bump:main"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"

@@ -3,7 +3,10 @@ import os
 import re
 import sys
 
-import tomli
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
 
 DEFAULT_SEMVER_REGEX = r"\d+\.\d+\.\d+"
 SEMVER_PART_ALIASES = {
@@ -39,7 +42,7 @@ def read_config():
         )
 
     with open("pyproject.toml", "rb") as f:
-        pyproject_toml = tomli.load(f)
+        pyproject_toml = tomllib.load(f)
 
     if "bump" in pyproject_toml.get("tool", {}):
         if "source" not in pyproject_toml["tool"]["bump"]:
