@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "definitions": {
+    "file-argument": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string",
+              "format": "iri-reference"
+            },
+            "regex": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "type": "object",
+  "maxProperties": 2,
+  "additionalProperties": false,
+  "properties": {
+    "source": {
+      "$ref": "#/definitions/file-argument"
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/file-argument"
+      }
+    }
+  }
+}
