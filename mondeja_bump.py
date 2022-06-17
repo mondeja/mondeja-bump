@@ -9,6 +9,7 @@ except ImportError:
     import tomli as tomllib
 
 DEFAULT_SEMVER_REGEX = r"\d+\.\d+\.\d+"
+DEFAULT_PYPROJECT_TOML_SEMVER_REGEX = r"(version = [\"'])(\d+\.\d+\.\d+)([\"'])"
 SEMVER_PART_ALIASES = {
     "major": "major",
     "minor": "minor",
@@ -108,7 +109,12 @@ def read_config():
                         _errored = True
                         continue
                     _target = {
-                        "regex": target.get("regex", DEFAULT_SEMVER_REGEX),
+                        "regex": target.get(
+                            "regex",
+                            DEFAULT_PYPROJECT_TOML_SEMVER_REGEX
+                            if target["file"] == "pyproject.toml"
+                            else DEFAULT_SEMVER_REGEX,
+                        ),
                         "file": target["file"],
                     }
                 targets.append(_target)
@@ -128,7 +134,7 @@ def read_config():
             "file": "pyproject.toml",
             "regex": DEFAULT_SEMVER_REGEX,
         },
-        [{"file": "pyproject.toml", "regex": DEFAULT_SEMVER_REGEX}],
+        [{"file": "pyproject.toml", "regex": DEFAULT_PYPROJECT_TOML_SEMVER_REGEX}],
     )
 
 
@@ -138,10 +144,10 @@ def read_source_version(source):
     if match is None:
         regex, file = source["regex"], source["file"]
         error(f"Version not found using regex '{regex}'" f" to search in file {file}")
-    else:
-        version = match.group(0) if not match.groups() else match.group(1)
-        is_semver_version_or_error(version)
-        return version
+
+    version = match.group(0) if not match.groups() else match.group(1)
+    is_semver_version_or_error(version)
+    return version
 
 
 def bump_version(version, semver_part):
@@ -163,7 +169,44 @@ def write_new_version_in_targets(version, targets):
         with open(target["file"]) as f:
             previous_content = f.read()
         with open(target["file"], "w") as f:
-            f.write(re.sub(target["regex"], version, previous_content))
+            try:
+                regex = target.get("regex", DEFAULT_SEMVER_REGEX)
+
+                match = re.search(regex, previous_content)
+                if 0 <= len(match.groups()) <= 1:
+                    # no groups: entire match
+                    new_content = re.sub(regex, version, previous_content)
+                elif len(match.groups()) == 3:
+                    # groups before and after
+                    new_content = re.sub(
+                        regex, rf"\g<1>{version}\g<3>", previous_content
+                    )
+                elif len(match.groups()) == 2:
+                    if re.match(DEFAULT_SEMVER_REGEX, match.group(1)):
+                        # group after
+                        new_content = re.sub(
+                            regex, rf"{version}\g<2>", previous_content
+                        )
+                    elif re.match(DEFAULT_SEMVER_REGEX, match.group(2)):
+                        # group before
+                        new_content = re.sub(
+                            regex, rf"\g<1>{version}", previous_content
+                        )
+                    else:
+                        error(
+                            f"Version not found using regex '{regex}'"
+                            f" to search in file {target['file']}"
+                        )
+                else:
+                    error(
+                        f"Too much groups found using regex '{regex}'"
+                        f" to search in file {target['file']}"
+                    )
+            except Exception:
+                f.write(previous_content)
+                raise
+            else:
+                f.write(new_content)
 
 
 def run():
@@ -184,8 +227,6 @@ def run():
     )
 
     write_new_version_in_targets(target_version, targets)
-    sys.stdout.write(f"{target_version}\n")
-
     return 0
 
 
