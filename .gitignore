@@ -4,3 +4,7 @@ dist/
 *.egg-info
 /build/
 .vscode/
+htmlcov/
+.coverage
+.DS_Store
+.pytest_cache

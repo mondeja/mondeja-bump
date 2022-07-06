@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mondeja-bump"
-version = "0.2.2"
+version = "0.2.3"
 description = "Just bump semantic version."
 authors = ["Álvaro Mondéjar Rubio <mondejar1994@gmail.com>"]
 license = "BSD-3-Clause"
@@ -11,5 +11,25 @@ packages = [{include = "mondeja_bump.py"}]
 python = "^3.7"
 tomli = { version = "*", python = "<3.11" }
 
+[tool.poetry.group.test.dependencies]
+pytest = "^7.1.2"
+coverage = "^6.4.1"
+contextlib-chdir = "^1.0.2"
+
 [tool.poetry.scripts]
 bump = "mondeja_bump:main"
+
+[tool.pytest.ini_options]
+addopts = "-svv"
+
+[tool.coverage.run]
+source = ["mondeja_bump"]
+
+[tool.poetry-exec-plugin.commands]
+t = "coverage run -m pytest"
+test = "coverage run -m pytest"
+"test:show" = """coverage run -m pytest &&
+coverage html &&
+python -c 'import webbrowser as w;w.open("http://127.0.0.1:8088")' &&
+python -m http.server 8088 -b localhost -d htmlcov
+"""

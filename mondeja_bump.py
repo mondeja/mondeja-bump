@@ -9,7 +9,7 @@ except ImportError:
     import tomli as tomllib
 
 DEFAULT_SEMVER_REGEX = r"\d+\.\d+\.\d+"
-DEFAULT_PYPROJECT_TOML_SEMVER_REGEX = r"(version = [\"'])(\d+\.\d+\.\d+)([\"'])"
+DEFAULT_PYPROJECT_TOML_SEMVER_REGEX = r"(version\s*=\s*[\"'])(\d+\.\d+\.\d+)([\"'])"
 SEMVER_PART_ALIASES = {
     "major": "major",
     "minor": "minor",
@@ -39,40 +39,43 @@ def read_config():
     if not os.path.isfile("pyproject.toml"):
         error(
             "Reading of configuration from"
-            " another file than pyproject.toml is not supported\n"
+            " another file than pyproject.toml is not supported"
         )
 
     with open("pyproject.toml", "rb") as f:
         pyproject_toml = tomllib.load(f)
 
     if "bump" in pyproject_toml.get("tool", {}):
-        if "source" not in pyproject_toml["tool"]["bump"]:
+        if "source" not in pyproject_toml["tool"].get("bump", {}):
             source = {
                 "file": "pyproject.toml",
-                "regex": DEFAULT_SEMVER_REGEX,
+                "regex": DEFAULT_PYPROJECT_TOML_SEMVER_REGEX,
             }
         else:
             source = pyproject_toml["tool"]["bump"]["source"]
             if isinstance(source, str):
                 source = {
                     "file": source,
-                    "regex": DEFAULT_SEMVER_REGEX,
+                    "regex": DEFAULT_PYPROJECT_TOML_SEMVER_REGEX
+                    if source == "pyproject.toml"
+                    else DEFAULT_SEMVER_REGEX,
                 }
             elif not isinstance(source, dict):
                 error(
                     f"Invalid type {type(source).__name__} for"
-                    " `tool.bump.source` config field"
+                    " `tool.bump.source` config field, expected"
+                    " string or object"
                 )
             else:
                 source = {
                     "file": source.get("file", "pyproject.toml"),
-                    "regex": DEFAULT_SEMVER_REGEX,
+                    "regex": source.get("regex", DEFAULT_SEMVER_REGEX),
                 }
         if "targets" not in pyproject_toml["tool"]["bump"]:
             targets = [
                 {
                     "file": "pyproject.toml",
-                    "regex": DEFAULT_SEMVER_REGEX,
+                    "regex": DEFAULT_PYPROJECT_TOML_SEMVER_REGEX,
                 }
             ]
         else:
@@ -81,32 +84,35 @@ def read_config():
             if not isinstance(_targets, list):
                 error(
                     f"Invalid type {type(_targets).__name__} for"
-                    " `tool.bump.targets` config field"
+                    " `tool.bump.targets` config field, expected list"
                 )
 
-            targets, _errored = [], False
+            targets, _error = [], False
             for i, target in enumerate(_targets):
                 _target = None
                 if isinstance(target, str):
                     _target = {
                         "file": target,
-                        "regex": DEFAULT_SEMVER_REGEX,
+                        "regex": DEFAULT_PYPROJECT_TOML_SEMVER_REGEX
+                        if target == "pyproject.toml"
+                        else DEFAULT_SEMVER_REGEX,
                     }
                 elif not isinstance(target, dict):
                     error(
-                        f"Invalid type {type(_targets).__name__} for"
-                        f" `tool.bump.targets[{i}]` config field",
+                        f"Invalid type {type(target).__name__} for"
+                        f" `tool.bump.targets[{i}]` config field,"
+                        " expected string or object",
                         exit=False,
                     )
-                    _errored = True
+                    _error = True
                     continue
                 else:
                     if "file" not in target:
                         error(
-                            "tool.bump.targets[{i}] must contain a `file` field",
+                            f"tool.bump.targets[{i}] must contain a `file` field",
                             exit=False,
                         )
-                        _errored = True
+                        _error = True
                         continue
                     _target = {
                         "regex": target.get(
@@ -118,15 +124,14 @@ def read_config():
                         "file": target["file"],
                     }
                 targets.append(_target)
-            if _errored:
+            if _error:
                 sys.exit(1)
         return source, targets
     elif "poetry" not in pyproject_toml.get(
         "tool", {}
     ) or "version" not in pyproject_toml["tool"].get("poetry"):
         error(
-            "[tool.bump] version not defined in pyproject.toml"
-            " and no `tool.poetry.version` found"
+            "`tool.bump` section nor `tool.poetry.version` found in" " pyproject.toml"
         )
 
     return (
@@ -145,7 +150,14 @@ def read_source_version(source):
         regex, file = source["regex"], source["file"]
         error(f"Version not found using regex '{regex}'" f" to search in file {file}")
 
-    version = match.group(0) if not match.groups() else match.group(1)
+    if not match.groups():
+        version = match.group(0)
+    elif len(match.groups()) == 1:
+        version = match.group(1)
+    elif len(match.groups()) == 3:
+        version = match.group(2)
+    else:
+        version = match.groups()[-1]
     is_semver_version_or_error(version)
     return version
 
@@ -173,8 +185,13 @@ def write_new_version_in_targets(version, targets):
                 regex = target.get("regex", DEFAULT_SEMVER_REGEX)
 
                 match = re.search(regex, previous_content)
+                if match is None:
+                    error(
+                        f"Version not found using regex '{regex}'"
+                        f" to search in file {target['file']}"
+                    )
                 if 0 <= len(match.groups()) <= 1:
-                    # no groups: entire match
+                    # zero or one group: entire match
                     new_content = re.sub(regex, version, previous_content)
                 elif len(match.groups()) == 3:
                     # groups before and after
@@ -194,7 +211,7 @@ def write_new_version_in_targets(version, targets):
                         )
                     else:
                         error(
-                            f"Version not found using regex '{regex}'"
+                            f"No semantic version found using regex '{regex}'"
                             f" to search in file {target['file']}"
                         )
                 else:
@@ -209,7 +226,7 @@ def write_new_version_in_targets(version, targets):
                 f.write(new_content)
 
 
-def run():
+def run(argv=[]):
     parser = argparse.ArgumentParser(description="Just bump semantic version.")
     parser.add_argument(
         "semver_part",
@@ -217,7 +234,7 @@ def run():
         choices=["major", "minor", "patch", "M", "m", "p", "1", "2", "3"],
         help="Bump type",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     source, targets = read_config()
     source_version = read_source_version(source)
@@ -227,12 +244,13 @@ def run():
     )
 
     write_new_version_in_targets(target_version, targets)
+    sys.stdout.write(f"{target_version}\n")
     return 0
 
 
-def main():
-    raise SystemExit(run())
+def main():  # pragma: no cover
+    raise SystemExit(run(sys.argv[1:]))
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()
